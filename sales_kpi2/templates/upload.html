@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Data – Sales KPI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<nav>
+    <a href="/" class="brand">&#128200; SalesKPI</a>
+    <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/upload" class="active">Upload</a></li>
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/ml">ML Insights</a></li>
+    </ul>
+</nav>
+
+<div class="container">
+    <p class="page-title">&#128228; Upload Sales Data</p>
+    <p class="page-sub">Upload your CSV file or use our built-in sample data to get started instantly</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    <!-- Sample Data Banner -->
+    <div class="sample-banner">
+        <div>
+            <strong>&#9889; No CSV? No problem!</strong>
+            <p>Click the button to instantly load 30 sample sales records and explore the full dashboard.</p>
+        </div>
+        <a href="/load-sample" class="btn btn-white">Load Sample Data</a>
+    </div>
+
+    <div class="upload-card">
+        <form method="POST" enctype="multipart/form-data">
+            <div class="upload-zone" id="dropZone">
+                <input type="file" name="file" id="fileInput" accept=".csv" onchange="showFileName(this)">
+                <label for="fileInput">
+                    <span class="upload-icon">&#128194;</span>
+                    <strong id="fileLabel">Click to choose a CSV file</strong>
+                    <p>or drag and drop your file here &nbsp;&bull;&nbsp; CSV only</p>
+                </label>
+            </div>
+            <br>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:.85rem;">
+                &#128228; Upload &amp; Process Data
+            </button>
+        </form>
+
+        <div class="sample-info">
+            <h4>&#9989; Your CSV column names are auto-detected. Any of these work:</h4>
+            <table class="col-table">
+                <tr><th>Field</th><th>Accepted column names in your CSV</th></tr>
+                <tr><td><strong>Customer</strong></td><td>customer_name, customer, name, client, sales_rep, rep, agent, employee</td></tr>
+                <tr><td><strong>Product</strong></td><td>product, product_name, product_category, category, item, item_name, sku</td></tr>
+                <tr><td><strong>Amount</strong></td><td>amount, sales_amount, sales, price, unit_price, revenue, total, value</td></tr>
+                <tr><td><strong>Date</strong></td><td>date, order_date, sale_date, transaction_date, invoice_date, created_at</td></tr>
+                <tr><td><strong>Region</strong></td><td>region, area, zone, location, city, state, territory, region_and_sales_rep</td></tr>
+            </table>
+            <p style="margin-top:.9rem;font-size:.83rem;color:#9ca3af;">
+                &#128197; Date format: <strong>YYYY-MM-DD</strong> &nbsp;&bull;&nbsp; Amount must be a number &nbsp;&bull;&nbsp; Extra columns are ignored
+            </p>
+        </div>
+    </div>
+</div>
+
+<footer>&#169; 2024 Sales KPI Analytics</footer>
+
+<script>
+function showFileName(input) {
+    const name = input.files[0]?.name;
+    document.getElementById('fileLabel').textContent = name || 'Click to choose a CSV file';
+    if (name) document.getElementById('dropZone').style.borderColor = '#4f46e5';
+}
+const zone = document.getElementById('dropZone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.style.background = '#f0effe'; zone.style.borderColor = '#4f46e5'; });
+zone.addEventListener('dragleave', () => { zone.style.background = ''; zone.style.borderColor = ''; });
+zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.style.background = ''; zone.style.borderColor = '#4f46e5';
+    document.getElementById('fileInput').files = e.dataTransfer.files;
+    showFileName(document.getElementById('fileInput'));
+});
+</script>
+</body>
+</html>

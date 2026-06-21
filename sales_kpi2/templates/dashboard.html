@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard – Sales KPI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<nav>
+    <a href="/" class="brand">&#128200; SalesKPI</a>
+    <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/upload">Upload</a></li>
+        <li><a href="/dashboard" class="active">Dashboard</a></li>
+        <li><a href="/ml">ML Insights</a></li>
+    </ul>
+</nav>
+
+<div class="container">
+    <p class="page-title">&#128200; Sales Dashboard</p>
+    <p class="page-sub">Build custom charts by selecting features from your dataset</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    {% if kpi and kpi.total_records > 0 %}
+
+    <!-- Filter (only show if temporal columns exist) -->
+    {% if temporal %}
+    <form method="GET" action="/dashboard" id="dateFilterForm">
+        <div class="filter-bar">
+            <span style="font-weight:700;color:#1e1b4b;">&#128197; Filter by Date</span>
+            <label>From</label>
+            <input type="date" name="start_date" id="filterStartDate" value="{{ start_date }}">
+            <label>To</label>
+            <input type="date" name="end_date" id="filterEndDate" value="{{ end_date }}">
+            <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+            <a href="/dashboard" class="btn btn-outline btn-sm">Reset</a>
+        </div>
+    </form>
+    {% else %}
+    <input type="hidden" id="filterStartDate" value="">
+    <input type="hidden" id="filterEndDate" value="">
+    {% endif %}
+
+    <!-- Dynamic KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-icon purple">&#128202;</div>
+            <div>
+                <div class="kpi-label">Total Records</div>
+                <div class="kpi-value">{{ "{:,}".format(kpi.total_records) }}</div>
+                <div class="kpi-sub">{{ kpi.total_columns }} columns</div>
+            </div>
+        </div>
+        {% for col, stats in kpi.numeric_stats.items() %}
+        <div class="kpi-card">
+            <div class="kpi-icon {{ ['green','yellow','red','purple'][loop.index0 % 4] }}">&#128176;</div>
+            <div>
+                <div class="kpi-label">Total {{ col | replace('_',' ') | title }}</div>
+                <div class="kpi-value">₹{{ "{:,.0f}".format(stats.sum) }}</div>
+                <div class="kpi-sub">Avg: ₹{{ "{:,.0f}".format(stats.avg) }}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% for col, count in kpi.category_counts.items() %}
+        {% if loop.index0 < 2 %}
+        <div class="kpi-card">
+            <div class="kpi-icon {{ ['yellow','red','green','purple'][loop.index0 % 4] }}">&#128101;</div>
+            <div>
+                <div class="kpi-label">{{ col | replace('_',' ') | title }}</div>
+                <div class="kpi-value">{{ count }}</div>
+                <div class="kpi-sub">Unique values</div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <!-- ═══════════ CHART BUILDER ═══════════ -->
+    <div class="chart-builder">
+        <div class="builder-header">
+            <div class="builder-title">
+                <span class="builder-icon">&#128296;</span>
+                <div>
+                    <h3>Chart Builder</h3>
+                    <p>Select features and chart type, then click "Add Chart"</p>
+                </div>
+            </div>
+            <div class="chart-counter" id="chartCounter">0 charts</div>
+        </div>
+
+        <!-- Quick Presets (dynamically generated from available columns) -->
+        <div class="preset-section">
+            <span class="preset-label">&#9889; Quick Presets:</span>
+            <div class="preset-chips">
+                {% for cat in categorical %}
+                {% if numeric %}
+                <button class="preset-chip" onclick="applyPreset('{{ cat }}','{{ numeric[0] }}','SUM','bar')">
+                    &#128202; {{ numeric[0] | replace('_',' ') | title }} by {{ cat | replace('_',' ') | title }}
+                </button>
+                {% endif %}
+                {% endfor %}
+                {% if temporal and numeric %}
+                <button class="preset-chip" onclick="applyPreset('{{ temporal[0] }}','{{ numeric[0] }}','SUM','line')">
+                    &#128197; {{ numeric[0] | replace('_',' ') | title }} Over Time
+                </button>
+                {% endif %}
+                {% for cat in categorical[:2] %}
+                {% if numeric %}
+                <button class="preset-chip" onclick="applyPreset('{{ cat }}','{{ numeric[0] }}','AVG','bar')">
+                    &#128181; Avg {{ numeric[0] | replace('_',' ') | title }} by {{ cat | replace('_',' ') | title }}
+                </button>
+                <button class="preset-chip" onclick="applyPreset('{{ cat }}','{{ numeric[0] }}','COUNT','pie')">
+                    &#128722; Count by {{ cat | replace('_',' ') | title }}
+                </button>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Builder Controls -->
+        <div class="builder-controls">
+            <div class="control-group">
+                <label for="xAxisSelect">X-Axis (Group By)</label>
+                <select id="xAxisSelect">
+                    {% for col in columns %}
+                    <option value="{{ col }}" {% if (loop.index0 == 0 and col in categorical) or (categorical and col == categorical[0]) %}selected{% endif %}>{{ col | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="yAxisSelect">Y-Axis (Measure)</label>
+                <select id="yAxisSelect">
+                    {% for col in columns %}
+<option value="{{ col }}" {% if numeric and col == numeric[0] %}selected{% endif %}>{{ col | replace('_', ' ') | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="aggSelect">Aggregation</label>
+                <select id="aggSelect">
+                    <option value="SUM" selected>SUM</option>
+                    <option value="AVG">AVG</option>
+                    <option value="COUNT">COUNT</option>
+                    <option value="MIN">MIN</option>
+                    <option value="MAX">MAX</option>
+                </select>
+            </div>
+            <div class="control-group chart-type-group">
+                <label>Chart Type</label>
+                <div class="chart-type-selector">
+                    <button class="type-btn active" data-type="bar" title="Bar Chart">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><rect x="1" y="8" width="4" height="11" rx="1" fill="currentColor"/><rect x="8" y="3" width="4" height="16" rx="1" fill="currentColor"/><rect x="15" y="6" width="4" height="13" rx="1" fill="currentColor"/></svg>
+                    </button>
+                    <button class="type-btn" data-type="line" title="Line Chart">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><polyline points="1,16 5,10 10,13 15,4 19,8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button class="type-btn" data-type="pie" title="Pie Chart">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 0v8h8" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                    </button>
+                    <button class="type-btn" data-type="doughnut" title="Doughnut Chart">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="10" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"/></svg>
+                    </button>
+                    <button class="type-btn" data-type="horizontalBar" title="Horizontal Bar">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><rect x="1" y="2" width="16" height="4" rx="1" fill="currentColor"/><rect x="1" y="8" width="11" height="4" rx="1" fill="currentColor"/><rect x="1" y="14" width="14" height="4" rx="1" fill="currentColor"/></svg>
+                    </button>
+                    <button class="type-btn" data-type="radar" title="Radar Chart">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><polygon points="10,2 17,7 15,16 5,16 3,7" fill="none" stroke="currentColor" stroke-width="2"/><polygon points="10,6 13,9 12,13 8,13 7,9" fill="currentColor" opacity="0.3"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="control-group add-btn-group">
+                <button class="btn btn-primary btn-add-chart" id="addChartBtn" onclick="addChart()">
+                    &#10010; Add Chart
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Charts Grid -->
+    <div class="dynamic-charts-grid" id="chartsGrid">
+        <!-- Empty state shown when no charts -->
+        <div class="charts-empty-state" id="emptyState">
+            <div class="empty-illustration">
+                <div class="empty-bars">
+                    <div class="ebar e1"></div>
+                    <div class="ebar e2"></div>
+                    <div class="ebar e3"></div>
+                    <div class="ebar e4"></div>
+                </div>
+            </div>
+            <h3>No Charts Yet</h3>
+            <p>Use the Chart Builder above to create custom visualizations.<br>Try a <strong>Quick Preset</strong> to get started instantly!</p>
+        </div>
+    </div>
+
+    <script>
+    // ══════════ STATE ══════════
+    var chartInstances = {};
+    var chartCount = 0;
+    var selectedType = 'bar';
+
+    // Power BI-like slicer state
+    var activeFilter = { filter_col: '', filter_value: '' };
+
+
+    var COLORS = [
+        '#4f46e5','#7c3aed','#a855f7','#10b981','#f59e0b',
+        '#ef4444','#3b82f6','#ec4899','#14b8a6','#f97316',
+        '#6366f1','#8b5cf6','#06b6d4','#84cc16','#e11d48'
+    ];
+
+    // ══════════ CHART TYPE SELECTOR ══════════
+    document.querySelectorAll('.type-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.type-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            selectedType = btn.dataset.type;
+        });
+    });
+
+    // ══════════ PRESETS ══════════
+    function applyPreset(x, y, agg, type) {
+        document.getElementById('xAxisSelect').value = x;
+        document.getElementById('yAxisSelect').value = y;
+        document.getElementById('aggSelect').value = agg;
+
+        // Set chart type
+        selectedType = type;
+        document.querySelectorAll('.type-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.type === type);
+        });
+
+        // Auto-add the chart
+        addChart();
+    }
+
+    // ══════════ DASHBOARD REFRESH (slice/cross-filter) ══════════
+    function refreshDashboard() {
+        // Re-fetch data for each existing chart
+        var charts = document.querySelectorAll('#chartsGrid .dynamic-chart-card');
+        charts.forEach(function(card) {
+            var canvas = card.querySelector('canvas');
+            if (!canvas) return;
+            var chartId = canvas.getAttribute('id');
+
+            // Find meta from the card to re-request
+            var metaPills = card.querySelectorAll('.chart-meta .meta-pill');
+            var xAxis = null, yAxis = null, agg = null;
+            metaPills.forEach(function(p) {
+                var t = p.textContent || '';
+                if (t.startsWith('X:')) xAxis = t.replace('X:','').trim();
+                if (t.startsWith('Y:')) yAxis = t.replace('Y:','').trim();
+                if (t.startsWith('Agg:')) agg = t.replace('Agg:','').trim();
+            });
+
+            if (!xAxis || !yAxis || !agg) return;
+
+            // Remove and re-render chart by calling /api/chart-data again
+            if (chartInstances[chartId]) {
+                chartInstances[chartId].destroy();
+                delete chartInstances[chartId];
+            }
+
+            var startDate = document.getElementById('filterStartDate').value;
+            var endDate   = document.getElementById('filterEndDate').value;
+
+            var params = new URLSearchParams({
+                x_axis: xAxis,
+                y_axis: yAxis,
+                aggregation: agg,
+                start_date: startDate,
+                end_date: endDate,
+                filter_col: activeFilter.filter_col,
+                filter_value: activeFilter.filter_value
+            });
+
+            fetch('/api/chart-data?' + params.toString())
+                .then(function(res) {
+                    if (!res.ok) throw new Error('Server error (' + res.status + ')');
+                    return res.json();
+                })
+                .then(function(data) {
+                    var chartType = (card.querySelector('.type-pill') ? (card.querySelector('.type-pill').textContent || '').replace('type:','').trim() : null);
+                    // Determine chart type from meta pill
+                    var typeP = card.querySelector('.type-pill');
+                    var metaType = typeP ? (typeP.textContent || '').replace('type:','').trim() : 'bar';
+                    renderChart(data, xAxis, yAxis, agg, metaType);
+                    // Keep the same canvas id so Chart.js attaches correctly
+                    // renderChart creates a new card; for now, we rely on re-using existing card by redrawing via chartInstances.
+                })
+                .catch(function(err) {
+                    // no-op
+                });
+        });
+    }
+
+    // ══════════ ADD CHART ══════════
+    function addChart() {
+
+        var xAxis = document.getElementById('xAxisSelect').value;
+        var yAxis = document.getElementById('yAxisSelect').value;
+        var agg   = document.getElementById('aggSelect').value;
+        var startDate = document.getElementById('filterStartDate').value;
+        var endDate   = document.getElementById('filterEndDate').value;
+
+        var params = new URLSearchParams({
+            x_axis: xAxis,
+            y_axis: yAxis,
+            aggregation: agg,
+            start_date: startDate,
+            end_date: endDate,
+            filter_col: activeFilter.filter_col,
+            filter_value: activeFilter.filter_value
+        });
+
+
+        // Show loading state on button
+        var addBtn = document.getElementById('addChartBtn');
+        addBtn.disabled = true;
+        addBtn.innerHTML = '&#9203; Loading...';
+
+        fetch('/api/chart-data?' + params.toString())
+.then(function(res) {
+                if (!res.ok) throw new Error('Server error (' + res.status + ')');
+                return res.json();
+            })
+            .then(function(data) {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                renderChart(data, xAxis, yAxis, agg, selectedType);
+            })
+            .catch(function(err) {
+                alert('Failed to fetch chart data: ' + err);
+            })
+            .finally(function() {
+                addBtn.disabled = false;
+                addBtn.innerHTML = '&#10010; Add Chart';
+            });
+    }
+
+    // ══════════ RENDER CHART ══════════
+    function renderChart(data, xAxis, yAxis, agg, chartType) {
+        // Keep references for Power BI-like filtering refresh
+        // (used by slice/cross-filter)
+
+        // Hide empty state
+        var emptyState = document.getElementById('emptyState');
+        if (emptyState) emptyState.style.display = 'none';
+
+        chartCount++;
+        var chartId = 'chart_' + chartCount + '_' + Date.now();
+        var prettyX = xAxis.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        var prettyY = yAxis.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        var title = agg + ' of ' + prettyY + ' by ' + prettyX;
+
+        // Chart type icons
+        var typeIcons = {
+            'bar': '&#128202;', 'line': '&#128200;', 'pie': '&#129522;',
+            'doughnut': '&#128313;', 'horizontalBar': '&#128203;', 'radar': '&#128376;'
+        };
+
+        // Create chart card
+        var card = document.createElement('div');
+        card.className = 'dynamic-chart-card chart-enter';
+        card.id = 'card_' + chartId;
+        card.innerHTML =
+            '<div class="chart-card-header">' +
+                '<h3>' + (typeIcons[chartType] || '&#128202;') + ' ' + title + '</h3>' +
+                '<div class="chart-actions">' +
+                    '<button class="chart-action-btn download-btn" onclick="downloadChart(\'' + chartId + '\', \'' + title + '\')" title="Download as PNG">&#128229;</button>' +
+                    '<button class="chart-action-btn delete-btn" onclick="removeChart(\'' + chartId + '\')" title="Remove chart">&#10005;</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="chart-canvas-wrap"><canvas id="' + chartId + '"></canvas></div>' +
+            '<div class="chart-meta">' +
+                '<span class="meta-pill">X: ' + prettyX + '</span>' +
+                '<span class="meta-pill">Y: ' + prettyY + '</span>' +
+                '<span class="meta-pill">Agg: ' + agg + '</span>' +
+                '<span class="meta-pill type-pill">' + chartType + '</span>' +
+            '</div>';
+
+        document.getElementById('chartsGrid').appendChild(card);
+
+        // Trigger entrance animation
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                card.classList.remove('chart-enter');
+            });
+        });
+
+        // Build Chart.js config
+        var actualType = chartType === 'horizontalBar' ? 'bar' : chartType;
+        var isHorizontal = chartType === 'horizontalBar';
+
+        // Chart.js v3+ horizontal bar: use bar + indexAxis='y'
+
+        var isPieType = (chartType === 'pie' || chartType === 'doughnut');
+
+if (!data || !Array.isArray(data.labels) || !Array.isArray(data.values)) {
+            alert('Invalid chart data');
+            return;
+        }
+
+        var bgColors = isPieType
+            ? data.labels.map(function(_, i) { return COLORS[i % COLORS.length]; })
+            : (data.labels.length <= 15
+                ? data.labels.map(function(_, i) { return COLORS[i % COLORS.length]; })
+                : COLORS[0]);
+
+        var config = {
+            type: actualType,
+            data: {
+                labels: data.labels,
+                datasets: [{
+                    label: agg + ' of ' + prettyY,
+                    data: data.values,
+                    backgroundColor: bgColors,
+                    borderColor: isPieType ? '#fff' : (typeof bgColors === 'string' ? bgColors : bgColors),
+                    borderWidth: isPieType ? 3 : 2,
+                    borderRadius: (actualType === 'bar') ? 8 : 0,
+                    borderSkipped: false,
+                    tension: 0.4,
+                    fill: actualType === 'line',
+                    pointRadius: actualType === 'line' ? 4 : 0,
+                    pointBackgroundColor: COLORS[0],
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                indexAxis: isHorizontal ? 'y' : 'x',
+                interaction: { intersect: false, mode: 'index' },
+                plugins: {
+                    legend: {
+                        display: isPieType,
+                        position: 'bottom',
+                        labels: { padding: 12, font: { size: 11 } }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,27,75,0.9)',
+                        titleFont: { size: 13, weight: 'bold' },
+                        bodyFont: { size: 12 },
+                        padding: 12,
+                        cornerRadius: 10
+                    }
+                },
+                scales: isPieType || chartType === 'radar' ? {} : {
+                    y: { grid: { color: '#f3f4f6' }, ticks: { color: '#9ca3af' } },
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af', maxTicksLimit: 12 } }
+                },
+                // Fix for Chart.js v3+ horizontal bar using indexAxis
+                // (actualType already converted to 'bar'; indexAxis is set below)
+
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart'
+                }
+            }
+        };
+
+        // Line chart gradient fill
+        if (actualType === 'line') {
+            config.data.datasets[0].backgroundColor = function(ctx) {
+                var gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 280);
+                gradient.addColorStop(0, 'rgba(79,70,229,0.3)');
+                gradient.addColorStop(1, 'rgba(79,70,229,0.01)');
+                return gradient;
+            };
+            config.data.datasets[0].borderColor = '#4f46e5';
+            config.data.datasets[0].borderWidth = 3;
+        }
+
+        // Radar chart specific
+        if (chartType === 'radar') {
+            config.data.datasets[0].backgroundColor = 'rgba(79,70,229,0.2)';
+            config.data.datasets[0].borderColor = '#4f46e5';
+            config.data.datasets[0].borderWidth = 2;
+            config.data.datasets[0].pointBackgroundColor = '#4f46e5';
+            config.options.scales = {
+                r: { grid: { color: '#f3f4f6' }, ticks: { color: '#9ca3af' } }
+            };
+        }
+
+        var canvas = document.getElementById(chartId);
+
+        // Attach slice/cross-filter behavior
+        config.options.onClick = function(evt, elements) {
+            try {
+                if (!elements || elements.length === 0) return;
+                var idx = elements[0].index;
+                var label = (data.labels && data.labels[idx]) ? data.labels[idx] : null;
+                if (!label) return;
+
+                // Only slice when x-axis is a categorical/label dimension
+                activeFilter.filter_col = xAxis;
+                activeFilter.filter_value = label;
+
+                // Refresh all charts and data table using current slicer state
+                refreshDashboard();
+            } catch (e) {
+                // no-op
+            }
+        };
+
+        chartInstances[chartId] = new Chart(canvas, config);
+        updateCounter();
+
+    }
+
+    // ══════════ REMOVE CHART ══════════
+    function removeChart(chartId) {
+        var card = document.getElementById('card_' + chartId);
+        if (!card) return;
+
+        card.classList.add('chart-exit');
+        setTimeout(function() {
+            if (chartInstances[chartId]) {
+                chartInstances[chartId].destroy();
+                delete chartInstances[chartId];
+            }
+            card.remove();
+            chartCount--;
+            updateCounter();
+
+            // Show empty state if no charts left
+            if (document.querySelectorAll('.dynamic-chart-card').length === 0) {
+                var emptyState = document.getElementById('emptyState');
+                if (emptyState) emptyState.style.display = '';
+            }
+        }, 350);
+    }
+
+    // ══════════ DOWNLOAD CHART ══════════
+    function downloadChart(chartId, title) {
+        var canvas = document.getElementById(chartId);
+        if (!canvas) return;
+        var link = document.createElement('a');
+        link.download = title.replace(/\s+/g, '_') + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // ══════════ COUNTER ══════════
+    function updateCounter() {
+        var count = Object.keys(chartInstances).length;
+        document.getElementById('chartCounter').textContent = count + (count === 1 ? ' chart' : ' charts');
+    }
+    </script>
+
+    <!-- ═══════════ AI INSIGHTS PANEL ═══════════ -->
+    <div class="insights-section">
+        <div class="section-header">
+            <h2>&#128161; AI-Generated Insights</h2>
+            <p class="section-sub">Key observations auto-detected from your data</p>
+        </div>
+        <div class="insights-grid" id="insightsGrid">
+            <div class="insight-loading">Analyzing your data...</div>
+        </div>
+    </div>
+
+    <!-- ═══════════ SUMMARY STATISTICS ═══════════ -->
+    <div class="stats-section">
+        <div class="section-header">
+            <h2>&#128202; Summary Statistics</h2>
+            <p class="section-sub">Descriptive statistics for sales amount</p>
+        </div>
+        <div class="stats-grid" id="statsGrid">
+            <div class="insight-loading">Loading statistics...</div>
+        </div>
+    </div>
+
+    <!-- ═══════════ PIVOT TABLE -->
+    <div class="pivot-table-section">
+        <div class="explorer-header" style="margin-bottom: .9rem;">
+            <div>
+                <h2 style="font-size:1.3rem;font-weight:800;color:#1e1b4b;">&#128202; Pivot Table</h2>
+                <p class="section-sub" style="margin-top:.2rem;">Build a matrix using your dataset (respects date range + chart slicer clicks).</p>
+            </div>
+            <div class="explorer-controls" style="align-items:flex-end;">
+                <select id="pivotRowDim">
+                    {% for col in columns %}
+                    <option value="{{ col }}">Row: {{ col | replace('_',' ') | title }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="pivotColDim">
+                    <option value="">Column: None</option>
+                    {% for col in columns %}
+                    <option value="{{ col }}">Column: {{ col | replace('_',' ') | title }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="pivotValue">
+                    {% for col in numeric %}
+                    <option value="{{ col }}">Value: {{ col | replace('_',' ') | title }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="pivotAgg">
+                    <option value="SUM" selected>SUM</option>
+                    <option value="AVG">AVG</option>
+                    <option value="COUNT">COUNT</option>
+                    <option value="MIN">MIN</option>
+                    <option value="MAX">MAX</option>
+                </select>
+
+                <button class="btn btn-primary btn-sm" style="height:fit-content;" onclick="applyPivot()">&#10003; Apply Pivot</button>
+            </div>
+        </div>
+
+        <div class="pivot-table-wrap">
+            <div id="pivotLoading" class="pivot-loading">Loading pivot...</div>
+            <div id="pivotError" class="pivot-error" style="display:none;"></div>
+            <div id="pivotContainer" class="pivot-container" style="display:none;"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════ DATA EXPLORER ═══════════ -->
+    <div class="data-explorer">
+
+        <div class="explorer-header">
+            <div>
+                <h2>&#128451; Data Explorer</h2>
+                <p class="section-sub">Browse, search, and sort your raw dataset</p>
+            </div>
+            <div class="explorer-controls">
+                <input type="text" class="explorer-search" id="explorerSearch" placeholder="&#128269; Search your data..." oninput="debounceSearch()">
+                <select id="explorerSort" onchange="loadDataTable()">
+                    {% for col in columns %}
+                    <option value="{{ col }}">Sort by {{ col | replace('_',' ') | title }}</option>
+                    {% endfor %}
+                </select>
+                <select id="explorerDir" onchange="loadDataTable()">
+                    <option value="DESC">Descending</option>
+                    <option value="ASC">Ascending</option>
+                </select>
+            </div>
+        </div>
+        <div class="explorer-table-wrap">
+            <table id="explorerTable">
+                <thead id="explorerHead">
+                    <tr>
+                        <th>#</th>
+                        {% for col in columns %}
+                        <th>{{ col | replace('_',' ') | title }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody id="explorerBody">
+                    <tr><td colspan="{{ columns|length + 1 }}" style="text-align:center;color:#9ca3af;padding:2rem;">Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="explorer-pagination" id="explorerPagination"></div>
+    </div>
+
+    <script>
+    // ══════════ LOAD INSIGHTS ══════════
+    (function loadInsights() {
+        var startDate = document.getElementById('filterStartDate').value;
+        var endDate   = document.getElementById('filterEndDate').value;
+        var params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+
+fetch('/api/insights?' + params.toString())
+            .then(function(r) {
+                if (!r.ok) throw new Error('Server error (' + r.status + ')');
+                return r.json();
+            })
+            .then(function(data) {
+                var grid = document.getElementById('insightsGrid');
+                if (!data.insights || data.insights.length === 0) {
+                    grid.innerHTML = '<p style="color:#9ca3af;">No insights available.</p>';
+                    return;
+                }
+                var typeColors = {
+                    top: { bg: '#fef2f2', border: '#fca5a5', color: '#991b1b' },
+                    low: { bg: '#fff7ed', border: '#fdba74', color: '#9a3412' },
+                    highlight: { bg: '#ede9fe', border: '#c4b5fd', color: '#5b21b6' },
+                    stat: { bg: '#f0fdf4', border: '#86efac', color: '#166534' },
+                    trend: { bg: '#eff6ff', border: '#93c5fd', color: '#1e40af' }
+                };
+                grid.innerHTML = data.insights.map(function(ins) {
+                    var c = typeColors[ins.type] || typeColors.stat;
+                    return '<div class="insight-card" style="background:' + c.bg + ';border-left:4px solid ' + c.border + ';">' +
+                        '<div class="insight-card-icon">' + ins.icon + '</div>' +
+                        '<div><div class="insight-card-title" style="color:' + c.color + ';">' + ins.title + '</div>' +
+                        '<div class="insight-card-text">' + ins.text + '</div></div></div>';
+                }).join('');
+            })
+            .catch(function() {
+                document.getElementById('insightsGrid').innerHTML = '<p style="color:#ef4444;">Failed to load insights.</p>';
+            });
+    })();
+
+    // ══════════ LOAD SUMMARY STATS ══════════
+    (function loadStats() {
+fetch('/api/summary-stats')
+            .then(function(r) {
+                if (!r.ok) throw new Error('Server error (' + r.status + ')');
+                return r.json();
+            })
+            .then(function(data) {
+                var grid = document.getElementById('statsGrid');
+                if (!data.stats || !data.stats.count) {
+                    grid.innerHTML = '<p style="color:#9ca3af;">No statistics available.</p>';
+                    return;
+                }
+                var s = data.stats;
+                var items = [
+                    { label: 'Count', value: s.count, icon: '🔢' },
+                    { label: 'Total', value: '₹' + Number(s.sum).toLocaleString('en-IN'), icon: '💰' },
+                    { label: 'Mean', value: '₹' + Number(s.mean).toLocaleString('en-IN'), icon: '📏' },
+                    { label: 'Median', value: '₹' + Number(s.median).toLocaleString('en-IN'), icon: '⚖️' },
+                    { label: 'Std Dev', value: '₹' + Number(s.std_dev).toLocaleString('en-IN'), icon: '📐' },
+                    { label: 'Min', value: '₹' + Number(s.min).toLocaleString('en-IN'), icon: '⬇️' },
+                    { label: 'Max', value: '₹' + Number(s.max).toLocaleString('en-IN'), icon: '⬆️' },
+                    { label: 'Range', value: '₹' + Number(s.range).toLocaleString('en-IN'), icon: '↔️' },
+                    { label: 'Q1 (25%)', value: '₹' + Number(s.q1).toLocaleString('en-IN'), icon: '📊' },
+                    { label: 'Q3 (75%)', value: '₹' + Number(s.q3).toLocaleString('en-IN'), icon: '📊' }
+                ];
+                grid.innerHTML = items.map(function(item) {
+                    return '<div class="stat-card"><div class="stat-icon">' + item.icon + '</div>' +
+                        '<div class="stat-value">' + item.value + '</div>' +
+                        '<div class="stat-label">' + item.label + '</div></div>';
+                }).join('');
+            })
+            .catch(function() {
+                document.getElementById('statsGrid').innerHTML = '<p style="color:#ef4444;">Failed to load statistics.</p>';
+            });
+    })();
+
+    // ══════════ DATA EXPLORER ══════════
+    var searchTimeout = null;
+    var currentPage = 1;
+
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() { currentPage = 1; loadDataTable(); }, 350);
+    }
+
+function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatRupee(val) {
+        var num = Number(val);
+        if (isNaN(num)) return String(val);
+        return '₹' + num.toLocaleString('en-IN');
+    }
+
+
+    function loadDataTable(page) {
+        if (page) currentPage = page;
+        var search  = document.getElementById('explorerSearch').value;
+        var sortBy  = document.getElementById('explorerSort').value;
+        var sortDir = document.getElementById('explorerDir').value;
+
+        var params = new URLSearchParams({
+            page: currentPage, per_page: 15,
+            sort_by: sortBy, sort_dir: sortDir, search: search
+        });
+
+fetch('/api/data-table?' + params.toString())
+            .then(function(r) {
+                if (!r.ok) throw new Error('Server error (' + r.status + ')');
+                return r.json();
+            })
+            .then(function(data) {
+                var tbody = document.getElementById('explorerBody');
+                var colCount = (data.columns || []).length + 1;
+                if (!data.data || data.data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="' + colCount + '" style="text-align:center;color:#9ca3af;padding:2rem;">No records found.</td></tr>';
+                    document.getElementById('explorerPagination').innerHTML = '';
+                    return;
+                }
+                var dataCols = data.columns || Object.keys(data.data[0]);
+                var numericCols = data.numeric || [];
+                var offset = (data.page - 1) * data.per_page;
+                tbody.innerHTML = data.data.map(function(row, i) {
+                    var cells = '<td style="color:#9ca3af;">' + (offset + i + 1) + '</td>';
+                    dataCols.forEach(function(col) {
+                        var val = row[col];
+                        if (val === null || val === undefined) val = '';
+                        if (numericCols.indexOf(col) !== -1 && val !== '') {
+cells += '<td>' + formatRupee(val) + '</td>';
+                        } else {
+cells += '<td>' + escapeHtml(String(val)) + '</td>';
+                        }
+                    });
+                    return '<tr>' + cells + '</tr>';
+                }).join('');
+
+                // Pagination
+                var pag = document.getElementById('explorerPagination');
+                var totalPages = data.total_pages;
+                var html = '<span class="pag-info">Showing ' + (offset + 1) + '-' + Math.min(offset + data.per_page, data.total) + ' of ' + data.total + '</span>';
+                html += '<div class="pag-buttons">';
+                if (currentPage > 1) html += '<button class="pag-btn" onclick="loadDataTable(' + (currentPage - 1) + ')">&#9664; Prev</button>';
+                for (var p = 1; p <= Math.min(totalPages, 10); p++) {
+                    html += '<button class="pag-btn' + (p === currentPage ? ' active' : '') + '" onclick="loadDataTable(' + p + ')">' + p + '</button>';
+                }
+                if (currentPage < totalPages) html += '<button class="pag-btn" onclick="loadDataTable(' + (currentPage + 1) + ')">Next &#9654;</button>';
+                html += '</div>';
+                pag.innerHTML = html;
+            })
+            .catch(function() {
+                document.getElementById('explorerBody').innerHTML = '<tr><td colspan="20" style="text-align:center;color:#ef4444;padding:2rem;">Failed to load data.</td></tr>';
+            });
+    }
+
+    // Load data table on page load
+    loadDataTable();
+
+    // ══════════ PIVOT TABLE ══════════
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatNumber(val) {
+        var num = Number(val);
+        if (isNaN(num)) return String(val);
+        return num.toLocaleString('en-IN');
+    }
+
+    function applyPivot() {
+        var row_dim = document.getElementById('pivotRowDim').value;
+        var col_dim = document.getElementById('pivotColDim').value;
+        var value_measure = document.getElementById('pivotValue').value;
+        var agg = document.getElementById('pivotAgg').value;
+
+        var startDate = document.getElementById('filterStartDate') ? document.getElementById('filterStartDate').value : '';
+        var endDate   = document.getElementById('filterEndDate') ? document.getElementById('filterEndDate').value : '';
+
+        var params = new URLSearchParams({
+            row_dim: row_dim,
+            col_dim: col_dim,
+            value_measure: value_measure,
+            agg: agg,
+            // slicer support
+            filter_col: activeFilter.filter_col,
+            filter_value: activeFilter.filter_value,
+            start_date: startDate,
+            end_date: endDate
+        });
+
+        var loading = document.getElementById('pivotLoading');
+        var errEl = document.getElementById('pivotError');
+        var container = document.getElementById('pivotContainer');
+        if (loading) loading.style.display = '';
+        if (errEl) errEl.style.display = 'none';
+        if (container) container.style.display = 'none';
+
+        fetch('/api/pivot-table?' + params.toString())
+            .then(function(r) {
+                if (!r.ok) throw new Error('Server error (' + r.status + ')');
+                return r.json();
+            })
+            .then(function(data) {
+                if (data.error) throw new Error(data.error);
+
+                var rowLabels = data.row_labels || [];
+                var colLabels = data.col_labels || [];
+                var matrix = data.matrix || [];
+
+                var isSingleCol = (!data.col_dim || data.col_dim === '');
+
+                // Build table
+                var html = '';
+                html += '<div class="pivot-table-scroll">';
+                html += '<table class="pivot-table">';
+
+                html += '<thead><tr>';
+                html += '<th class="pivot-th pivot-row-head">' + escapeHtml(data.row_dim.replace(/_/g,' ')) + '</th>';
+
+                if (!isSingleCol) {
+                    colLabels.forEach(function(c) {
+                        html += '<th class="pivot-th">' + escapeHtml(String(c)) + '</th>';
+                    });
+                } else {
+                    html += '<th class="pivot-th">Total</th>';
+                }
+
+                html += '</tr></thead>';
+
+                html += '<tbody>';
+
+
+                // Totals helper
+                var grandTotal = 0;
+
+                for (var i = 0; i < rowLabels.length; i++) {
+                    html += '<tr>';
+                    html += '<th class="pivot-td pivot-row-label" scope="row">' + escapeHtml(String(rowLabels[i])) + '</th>';
+
+
+                    var rowSum = 0;
+                    for (var j = 0; j < (isSingleCol ? 1 : colLabels.length); j++) {
+                        var v = (matrix[i] && matrix[i][j] !== undefined) ? matrix[i][j] : 0;
+                        rowSum += Number(v) || 0;
+                        grandTotal += Number(v) || 0;
+                        html += '<td class="pivot-td pivot-cell">' + formatNumber(v) + '</td>';
+                    }
+
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table></div>';
+
+                loading.style.display = 'none';
+                container.innerHTML = html;
+                container.style.display = '';
+            })
+            .catch(function(e) {
+                if (loading) loading.style.display = 'none';
+                if (errEl) {
+                    errEl.style.display = '';
+                    errEl.textContent = 'Pivot error: ' + e.message;
+                }
+                if (container) container.style.display = 'none';
+            });
+    }
+
+    // Auto-render pivot after page load (best-effort)
+    window.setTimeout(function() {
+        if (document.getElementById('pivotRowDim')) applyPivot();
+    }, 250);
+
+    </script>
+
+
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">&#128202;</div>
+        <h3>No Data Yet</h3>
+        <p>Upload a CSV file or load sample data to see your dashboard.</p>
+        <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+            <a href="/upload" class="btn btn-primary">&#128228; Upload CSV</a>
+            <a href="/load-sample" class="btn btn-success">&#9889; Load Sample Data</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<footer>&#169; 2026 Sales KPI Analytics</footer>
+</body>
+</html>

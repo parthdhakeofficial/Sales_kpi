@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales KPI Analytics</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<nav>
+    <a href="/" class="brand">&#128200; SalesKPI</a>
+    <ul>
+        <li><a href="/" class="active">Home</a></li>
+        <li><a href="/upload">Upload</a></li>
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/ml">ML Insights</a></li>
+    </ul>
+</nav>
+
+<section class="hero">
+    <h1>Turn Your Sales Data<br>Into <span>Smart Insights</span></h1>
+    <p>Upload your CSV, explore KPI dashboards, and discover customer segments using Machine Learning — all in one place.</p>
+    <div class="hero-btns">
+        <a href="/upload" class="btn btn-white">&#128196; Upload CSV</a>
+        <a href="/load-sample" class="btn btn-outline" style="border-color:white;color:white;">&#9889; Try Sample Data</a>
+    </div>
+</section>
+
+<div class="features">
+    <div class="feature-card">
+        <div class="icon">&#128228;</div>
+        <h3>Easy CSV Upload</h3>
+        <p>Drag and drop any sales CSV. We auto-detect your column names — no formatting needed.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">&#128200;</div>
+        <h3>Live KPI Dashboard</h3>
+        <p>Instantly see Total Sales, Orders, Customers and Average Order Value with date filters.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">&#128202;</div>
+        <h3>Interactive Charts</h3>
+        <p>Beautiful Line, Bar and Pie charts powered by Chart.js for deep sales analysis.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">&#129302;</div>
+        <h3>AI Segmentation</h3>
+        <p>K-Means ML automatically groups customers into High, Medium and Low value segments.</p>
+    </div>
+</div>
+
+<footer>&#169; 2024 Sales KPI Analytics &nbsp;&bull;&nbsp; Built with Flask &amp; Python</footer>
+</body>
+</html>

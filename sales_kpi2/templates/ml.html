@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Insights – Sales KPI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<nav>
+    <a href="/" class="brand">&#128200; SalesKPI</a>
+    <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/upload">Upload</a></li>
+        <li><a href="/dashboard">Dashboard</a></li>
+        <li><a href="/ml" class="active">ML Insights</a></li>
+    </ul>
+</nav>
+
+<div class="container">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+            <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+    {% endwith %}
+
+    {% if clusters %}
+
+    {% set high_list   = clusters | selectattr('segment','equalto','High Value')   | list %}
+    {% set medium_list = clusters | selectattr('segment','equalto','Medium Value') | list %}
+    {% set low_list    = clusters | selectattr('segment','equalto','Low Value')    | list %}
+    {% set total = clusters | length %}
+
+    <!-- Hero Banner -->
+    <div class="ml-hero">
+        <div>
+            <h2>&#129302; Customer Segmentation</h2>
+            <p>Using <strong>K-Means Machine Learning</strong>, your {{ total }} customers have been automatically grouped into 3 segments based on how much they spend and how often they buy.</p>
+            <span class="ml-badge">&#128200; K-Means Clustering &nbsp;&bull;&nbsp; 3 Segments &nbsp;&bull;&nbsp; {{ total }} Customers Analysed</span>
+        </div>
+        <div style="text-align:center;">
+            <div style="font-size:5rem;">&#129302;</div>
+            <div style="opacity:.8;font-size:.9rem;margin-top:.5rem;">AI-Powered Analysis</div>
+        </div>
+    </div>
+
+    <!-- Segment Summary Cards -->
+    <div class="segment-cards">
+        <div class="seg-card high">
+            <div class="seg-icon">&#128081;</div>
+            <div class="seg-count">{{ high_list | length }}</div>
+            <div class="seg-label">High Value</div>
+            <div class="seg-desc">Top spenders &amp; frequent buyers<br>Reward &amp; retain these customers</div>
+        </div>
+        <div class="seg-card medium">
+            <div class="seg-icon">&#11088;</div>
+            <div class="seg-count">{{ medium_list | length }}</div>
+            <div class="seg-label">Medium Value</div>
+            <div class="seg-desc">Regular buyers with growth potential<br>Engage with offers &amp; promotions</div>
+        </div>
+        <div class="seg-card low">
+            <div class="seg-icon">&#127807;</div>
+            <div class="seg-count">{{ low_list | length }}</div>
+            <div class="seg-label">Low Value</div>
+            <div class="seg-desc">Occasional or new buyers<br>Nurture with onboarding campaigns</div>
+        </div>
+    </div>
+
+    <!-- Plot + Insights -->
+    <div class="ml-grid">
+        <div class="cluster-plot">
+            <h3>&#128200; Cluster Scatter Plot (K-Means)</h3>
+            <p style="font-size:.82rem;color:#9ca3af;margin-bottom:.8rem;">Each dot = one customer. X-axis = how often they buy. Y-axis = how much they spend.</p>
+            <img src="{{ url_for('static', filename='cluster_plot.png') }}?v={{ range(1,99999)|random }}" alt="Cluster Plot">
+        </div>
+
+        <div class="insight-box">
+            <h3>&#128161; What This Means For You</h3>
+
+            <div class="insight-item high">
+                <div class="insight-dot high"></div>
+                <div>
+                    <div class="insight-title">&#128081; High Value Customers ({{ high_list|length }})</div>
+                    <div class="insight-desc">These are your best customers. They buy frequently and spend the most. Give them loyalty rewards, early access to new products, and VIP treatment to keep them coming back.</div>
+                </div>
+            </div>
+
+            <div class="insight-item medium">
+                <div class="insight-dot medium"></div>
+                <div>
+                    <div class="insight-title">&#11088; Medium Value Customers ({{ medium_list|length }})</div>
+                    <div class="insight-desc">These customers buy regularly but haven't reached their full potential. Target them with discount offers, bundle deals, and personalised recommendations to move them up.</div>
+                </div>
+            </div>
+
+            <div class="insight-item low">
+                <div class="insight-dot low"></div>
+                <div>
+                    <div class="insight-title">&#127807; Low Value Customers ({{ low_list|length }})</div>
+                    <div class="insight-desc">These are occasional or new buyers. Use welcome campaigns, first-purchase discounts, and email follow-ups to increase their engagement and purchase frequency.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Logistic Regression Sales Prediction Section -->
+    {% if lr_accuracy %}
+    <div style="background: linear-gradient(135deg, #7c3aed, #a855f7); border-radius: 20px; padding: 2rem; color: white; margin-bottom: 2rem;">
+        <h2 style="font-size: 1.8rem; margin-bottom: 0.5rem;">&#128200; Logistic Regression - Sales Prediction</h2>
+        <p style="font-size: 1rem; opacity: 0.9; margin-top: 1rem;">Predicts future sales trends: High/Medium/Low sales days</p>
+        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 0.5rem;">Check terminal for accuracy & next 7 days predictions</p>
+    </div>
+
+    <!-- Logistic Regression Visualizations -->
+    <div class="ml-grid" style="margin-bottom: 2rem;">
+        <div class="cluster-plot">
+            <h3>&#128202; LR Confusion Matrix</h3>
+            <p style="font-size:.82rem;color:#9ca3af;margin-bottom:.8rem;">Sales prediction accuracy by category.</p>
+            <img src="{{ url_for('static', filename='lr_confusion_matrix.png') }}?v={{ range(1,99999)|random }}" alt="LR Confusion Matrix" style="width: 100%;">
+        </div>
+        <div class="cluster-plot">
+            <h3>&#128200; Feature Coefficients</h3>
+            <p style="font-size:.82rem;color:#9ca3af;margin-bottom:.8rem;">Which factors influence sales predictions.</p>
+            <img src="{{ url_for('static', filename='lr_coefficients.png') }}?v={{ range(1,99999)|random }}" alt="LR Coefficients" style="width: 100%;">
+        </div>
+    </div>
+
+    <!-- Future Predictions Table -->
+    {% if lr_results and lr_results.future_predictions %}
+    <div class="cluster-table-wrap" style="margin-bottom: 2rem;">
+        <h3>&#128073; Next 7 Days Sales Predictions</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Predicted Sales Category</th>
+                    <th>Confidence</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pred in lr_results.future_predictions %}
+                <tr>
+                    <td><strong>{{ pred.date }}</strong></td>
+                    <td>
+                        {% if pred.predicted_category == 'High Sales' %}
+                            <span class="badge high">&#128081; High Sales</span>
+                        {% elif pred.predicted_category == 'Medium Sales' %}
+                            <span class="badge medium">&#11088; Medium Sales</span>
+                        {% else %}
+                            <span class="badge low">&#127807; Low Sales</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ "%.1f"|format(pred.confidence) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- Segment Pie Chart + Bar Chart -->
+    <div class="charts-row2" style="margin-bottom:2rem;">
+        <div class="chart-card">
+            <h3>&#129522; Segment Distribution</h3>
+            <canvas id="segPie"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>&#128181; Avg Spend per Segment</h3>
+            <canvas id="segBar"></canvas>
+        </div>
+    </div>
+
+    <!-- Frequency vs Amount Bubble Chart -->
+    <div class="charts-row2" style="margin-bottom:2rem;">
+        <div class="chart-card">
+            <h3>&#128200; Frequency vs Total Spend</h3>
+            <canvas id="bubbleChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>&#128202; Spend Range Distribution</h3>
+            <canvas id="spendRangeChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Customer Table -->
+    <div class="cluster-table-wrap">
+        <h3>&#128101; All Customers &amp; Their Segments</h3>
+        <input class="search-box" type="text" id="searchInput" placeholder="&#128269;  Search by customer name or segment..." onkeyup="filterTable()">
+        <table id="clusterTable">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Customer</th>
+                    <th>Total Spent</th>
+                    <th>Purchases</th>
+                    <th>Avg per Purchase</th>
+                    <th>Segment</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in clusters | sort(attribute='total_amount', reverse=True) %}
+                {% set pct = ((c.total_amount / (clusters | map(attribute='total_amount') | max)) * 100) | int %}
+                <tr>
+                    <td style="color:#9ca3af;">{{ loop.index }}</td>
+                    <td><strong>{{ c.customer_name }}</strong></td>
+                    <td>
+                        ₹{{ "{:,.0f}".format(c.total_amount) }}
+                        <span class="progress-bar"><span class="progress-fill fill-{{ c.segment.split()[0].lower() }}" style="width:{{ pct }}%"></span></span>
+                    </td>
+                    <td>{{ c.frequency }} orders</td>
+                    <td>₹{{ "{:,.0f}".format(c.total_amount / c.frequency) }}</td>
+                    <td>
+                        {% if c.segment == 'High Value' %}
+                            <span class="badge high">&#128081; High Value</span>
+                        {% elif c.segment == 'Medium Value' %}
+                            <span class="badge medium">&#11088; Medium Value</span>
+                        {% else %}
+                            <span class="badge low">&#127807; Low Value</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script id="mlData" type="application/json">
+    {
+        "highCount": {{ high_list|length }},
+        "mediumCount": {{ medium_list|length }},
+        "lowCount": {{ low_list|length }},
+        "highAvg": {{ (high_list | map(attribute='total_amount') | list | sum / [high_list|length, 1] | max) | round(0) }},
+        "medAvg": {{ (medium_list | map(attribute='total_amount') | list | sum / [medium_list|length, 1] | max) | round(0) }},
+        "lowAvg": {{ (low_list | map(attribute='total_amount') | list | sum / [low_list|length, 1] | max) | round(0) }},
+        "allClusters": {{ clusters | tojson | safe }}
+    }
+    </script>
+
+    <script>
+    var mlData = JSON.parse(document.getElementById('mlData').textContent);
+    var allClusters = mlData.allClusters;
+
+    // Segment Pie
+    new Chart(document.getElementById('segPie'), {
+        type: 'doughnut',
+        data: {
+            labels: ['High Value', 'Medium Value', 'Low Value'],
+            datasets: [{
+                data: [mlData.highCount, mlData.mediumCount, mlData.lowCount],
+                backgroundColor: ['#ef4444','#f59e0b','#10b981'],
+                borderWidth: 4, borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true, cutout: '60%',
+            plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } } }
+        }
+    });
+
+    // Avg Spend Bar
+    new Chart(document.getElementById('segBar'), {
+        type: 'bar',
+        data: {
+            labels: ['High Value', 'Medium Value', 'Low Value'],
+            datasets: [{
+                label: 'Avg Total Spend (₹)',
+                data: [mlData.highAvg, mlData.medAvg, mlData.lowAvg],
+                backgroundColor: ['#ef4444','#f59e0b','#10b981'],
+                borderRadius: 10, borderSkipped: false
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { grid: { color: '#f3f4f6' } }, x: { grid: { display: false } } }
+        }
+    });
+
+    // Bubble Chart - Frequency vs Total Spend
+    var segColors = { 'High Value': '#ef4444', 'Medium Value': '#f59e0b', 'Low Value': '#10b981' };
+    var bubbleDatasets = ['High Value', 'Medium Value', 'Low Value'].map(function(seg) {
+        return {
+            label: seg,
+            data: allClusters.filter(d => d.segment === seg).map(d => ({
+                x: d.frequency,
+                y: d.total_amount,
+                r: Math.max(6, d.total_amount / 20000)
+            })),
+            backgroundColor: segColors[seg] + '99',
+            borderColor: segColors[seg],
+            borderWidth: 2
+        };
+    });
+    new Chart(document.getElementById('bubbleChart'), {
+        type: 'bubble',
+        data: { datasets: bubbleDatasets },
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+                x: { title: { display: true, text: 'Purchase Frequency' }, grid: { color: '#f3f4f6' } },
+                y: { title: { display: true, text: 'Total Spend (₹)' }, grid: { color: '#f3f4f6' } }
+            }
+        }
+    });
+
+    // Spend Range Distribution - Horizontal Bar
+    var sortedClusters = allClusters.slice().sort((a, b) => b.total_amount - a.total_amount);
+    new Chart(document.getElementById('spendRangeChart'), {
+        type: 'bar',
+        data: {
+            labels: sortedClusters.map(d => d.customer_name),
+            datasets: [{
+                label: 'Total Spend (₹)',
+                data: sortedClusters.map(d => d.total_amount),
+                backgroundColor: sortedClusters.map(d => segColors[d.segment]),
+                borderRadius: 6, borderSkipped: false
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: { grid: { color: '#f3f4f6' } }, y: { grid: { display: false } } }
+        }
+    });
+
+    // Table search
+    function filterTable() {
+        const q = document.getElementById('searchInput').value.toLowerCase();
+        document.querySelectorAll('#clusterTable tbody tr').forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+    }
+    </script>
+
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">&#129302;</div>
+        <h3>No Data for ML Analysis</h3>
+        <p>Upload a CSV file or load sample data to run customer segmentation.</p>
+        <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+            <a href="/upload" class="btn btn-primary">&#128228; Upload CSV</a>
+            <a href="/load-sample" class="btn btn-success">&#9889; Load Sample Data</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<footer>&#169; 2024 Sales KPI Analytics</footer>
+</body>
+</html>
